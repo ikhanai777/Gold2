@@ -37,6 +37,8 @@ docker compose up -d   # http://localhost:8787
 
 Requires Node ≥ 22.13 (uses the built-in `node:sqlite`).
 
+**Windows 10/11:** follow [HERMES_DEPLOY.md](HERMES_DEPLOY.md). It is written for an agent but works for people too. The PowerShell scripts in `scripts/windows/` start the server with auto-restart (`start-server.ps1`), register it to start at logon (`install-autostart.ps1`), stop it (`stop-server.ps1`) and verify it end to end (`healthcheck.ps1`).
+
 ## Data sources (all free)
 
 | Data | Source | Key |
