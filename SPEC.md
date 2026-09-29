@@ -1,6 +1,6 @@
 # Gold Signal Dashboard: Product & Technical Specification
 
-**Version:** 1.1 (draft)
+**Version:** 1.2 (as built)
 **Date:** 2026-09-29
 **Status:** Proposed
 
@@ -482,3 +482,30 @@ The backend has to run continuously (pollers plus SSE), and serverless free tier
 10. The disclaimer is visible on every view.
 11. **Zero cost:** the full app runs for 30 days with $0 spent. No provider config points at a paid plan, no data-provider account has a card attached (§1.3), and each provider's daily usage logs stay under its cap in §4.5.
 12. **No synthetic data:** a code search of the production build finds no mock, random or sample data generators. Simulating a provider outage produces "—" or a stale-badged last real value, never an estimate or interpolation. Every displayed value can be traced through its `source` and `ts` to a real fetch or a documented calculation.
+
+---
+
+## 12. As-Built Notes (v1.2)
+
+The implementation follows this spec. These are the differences found while building it against the live sources. All are still $0 and real-data-only.
+
+| Area | Spec | As built | Why |
+|---|---|---|---|
+| Yields (10Y real, 10Y, 2Y) | FRED (free key) | **U.S. Treasury daily yield-curve CSVs** (official, no key). Breakeven = 10Y nominal − 10Y real (computed) | Works with no key; same underlying data |
+| DXY, VIX, GVZ, oil, copper, S&P | Yahoo per symbol + FRED | **One batched Yahoo spark call** for all symbols (live every 5 min, 10y daily history every 3 h) | Far fewer calls |
+| Bid/ask | "if the source provides it" | **Swissquote public quote feed** (no key, unofficial) | gold-api.com gives price only |
+| Fed funds | FRED | **NY Fed EFFR API** (no key) | Works with no key |
+| CPI | FRED | **BLS public API v1** (no key), or FRED if a key is set | Works with no key |
+| News | GDELT + Finnhub | GDELT + **free RSS**: Google News search, Yahoo Finance (GC=F), Investing.com commodities, BBC World, Fed, ECB. Finnhub if a key is set | More sources, no key needed |
+| Chart instrument | Spot | Spot XAU/USD when a Twelve Data key is set. Otherwise **COMEX futures GC=F** (Yahoo), always labeled as futures, with the futures–spot basis in the header. Analytics use the same instrument as the chart | No keyless source for spot intraday history exists; mixing instruments would break §1.4 |
+| Spot previous close | — | From Stooq or Twelve Data only. If neither is reachable, the change shows "—" | Never estimated |
+| Signal horizons | Intraday 15m/1H, Swing 4H/1D, Position 1D/1W | Intraday **1H**, Swing **1D**, Position **1W** (weekly bars aggregated from real daily bars) | Live and backtest use exactly the same inputs |
+| Calendar "actual" | shown once released | Shown only if the source provides it. The Forex Factory weekly feed has none, so "—" | Never estimated |
+| Central-bank buying | — | Not included (see §4.2) | No free machine-readable source |
+| Hosting | §7.2 | Node + Fastify + `node:sqlite` in one process; `Dockerfile` and `docker-compose.yml` included | — |
+
+**Updated Yahoo budget:** futures 1m every 2 min (720), 5m/15m/1h/1d refresh every 30 min (192), spark live (288), spark daily (8), daily backfill (5) ≈ 1,200 calls/day against a self-imposed cap of 2,500.
+
+**Measured on real data (first build, COMEX futures, Sep 2026):**
+- **Range bands:** closes stayed inside the 68% band 71% / 73% / 73% of the time (day/week/month), so §11 criterion 7 is met. For the 95% band the figures are 91% / 96% / 96%.
+- **Signals vs buy-and-hold:** the default-weight signals did **not** beat buy-and-hold on swing or position horizons during gold's 2020–2026 bull market. Their directional hit rate is ~50–59%. The Performance page shows this openly.

@@ -1,0 +1,7 @@
+{
+  "_comment": "Default factor weights (%) per horizon, SPEC §6.3. Excluded (stale/unavailable) factors are dropped and the rest re-normalised.",
+  "intraday": { "trend": 20, "momentum": 20, "sr": 15, "realYields": 5, "dxy": 12, "fedExp": 5, "breakevens": 0, "vix": 8, "geo": 3, "etf": 0, "cot": 0, "news": 12, "seasonality": 0 },
+  "swing":    { "trend": 20, "momentum": 12, "sr": 10, "realYields": 12, "dxy": 12, "fedExp": 8, "breakevens": 3, "vix": 5, "geo": 5, "etf": 4, "cot": 4, "news": 5, "seasonality": 0 },
+  "position": { "trend": 15, "momentum": 5, "sr": 5, "realYields": 18, "dxy": 10, "fedExp": 10, "breakevens": 7, "vix": 3, "geo": 7, "etf": 7, "cot": 6, "news": 2, "seasonality": 5 },
+  "thresholds": { "strongBuy": 60, "buy": 20, "sell": -20, "strongSell": -60, "hysteresis": 5 }
+}
