@@ -2,7 +2,7 @@
 // clients, keeping usage inside free tiers (SPEC §4.5). Failures leave the last
 // real value in place (with its original timestamp) — nothing is estimated.
 import { config } from './config.js';
-import { db, loadCandles, saveCandles } from './db.js';
+import { store } from './store.js';
 import { aggregate, mergeCandles, toWeekly } from './engines/aggregate.js';
 import { classify, normTitle, similarity } from './engines/newsClassify.js';
 import { blsCpi, cftcGold, fredReleaseDates, fredSeries, gldHoldings, gprDaily, nyFedEffr, treasuryCurve } from './providers/macro.js';
@@ -159,8 +159,8 @@ async function futuresBackfill() {
     const r = await yahooChart('GC=F', interval, range);
     let bars = r.candles;
     if (tf === '1m') {
-      saveCandles('GC=F', '1m', bars, YF);
-      bars = mergeCandles(loadCandles('GC=F', '1m', Math.floor(Date.now() / 1000) - 7 * 86400), bars);
+      store().saveCandles('GC=F', '1m', bars, YF);
+      bars = mergeCandles(store().loadCandles('GC=F', '1m', Math.floor(Date.now() / 1000) - 7 * 86400), bars);
     }
     setCandles('GC=F', tf, bars, YF);
     if (tf === '1h') setCandles('GC=F', '4h', aggregate(bars, TF_SECONDS['4h']), `${YF} (4h aggregated from 1h)`);
@@ -172,7 +172,7 @@ async function futuresBackfill() {
 async function futures1m() {
   if (!getCandles('GC=F', '1m')) return;
   const r = await yahooChart('GC=F', '1m', '1d');
-  saveCandles('GC=F', '1m', r.candles, YF);
+  store().saveCandles('GC=F', '1m', r.candles, YF);
   const cutoff = Date.now() / 1000 - 7 * 86400;
   setCandles('GC=F', '1m', mergeCandles(getCandles('GC=F', '1m')!.bars, r.candles).filter((b) => b.time >= cutoff), YF);
   refreshHigherTfs('GC=F', YF);
@@ -197,8 +197,8 @@ async function spotBackfill() {
   if (!config.keys.twelveData) return;
   for (const tf of ['1m', '5m', '15m', '1h', '4h', '1d'] as const) {
     const bars = await twelveDataSeries(tf, 5000);
-    if (tf === '1m') saveCandles('XAUUSD', '1m', bars, TD);
-    setCandles('XAUUSD', tf, tf === '1m' ? mergeCandles(loadCandles('XAUUSD', '1m', Math.floor(Date.now() / 1000) - 7 * 86400), bars) : bars, TD);
+    if (tf === '1m') store().saveCandles('XAUUSD', '1m', bars, TD);
+    setCandles('XAUUSD', tf, tf === '1m' ? mergeCandles(store().loadCandles('XAUUSD', '1m', Math.floor(Date.now() / 1000) - 7 * 86400), bars) : bars, TD);
   }
   setCandles('XAUUSD', '1w', toWeekly(getCandles('XAUUSD', '1d')!.bars), `${TD} (weekly aggregated from daily)`);
   log('[spot] Twelve Data backfill done');
@@ -208,7 +208,7 @@ async function spot1m() {
   if (!config.keys.twelveData || !getCandles('XAUUSD', '1m')) return;
   if (!marketStatus().open) return; // save free credits while the market is closed
   const bars = await twelveDataSeries('1m', 15);
-  saveCandles('XAUUSD', '1m', bars, TD);
+  store().saveCandles('XAUUSD', '1m', bars, TD);
   const cutoff = Date.now() / 1000 - 7 * 86400;
   setCandles('XAUUSD', '1m', mergeCandles(getCandles('XAUUSD', '1m')!.bars, bars).filter((b) => b.time >= cutoff), TD);
   // Provider bar replaces the tick-built forming bar once available.
@@ -287,8 +287,6 @@ async function gpr() {
 
 // ---------------- news ----------------
 
-const insertNews = db.prepare(`INSERT OR IGNORE INTO news (id, ts, title, url, source, feed, snippet, topic, direction, impact, rationale, fetched_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
 function hashId(s: string) {
   let h = 2166136261;
@@ -310,7 +308,7 @@ export function ingestNews(raw: RawNews[], feed: string) {
     const item: NewsItem = { id: hashId(r.url), title: r.title, url: r.url, source: r.source, feed: r.feed, ts: r.ts, snippet: r.snippet, ...c };
     existing.push(item);
     norms.push(nt);
-    insertNews.run(item.id, item.ts, item.title, item.url, item.source, item.feed, item.snippet, item.topic, item.direction, item.impact, item.rationale, now());
+    store().insertNews(item);
     added++;
   }
   state.news = existing.filter((n) => Date.parse(n.ts) >= cutoff).sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 600);

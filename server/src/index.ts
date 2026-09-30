@@ -1,5 +1,6 @@
 // Gold Signal Dashboard backend: one always-on Node process that polls free
 // data sources, computes analytics and serves the API + SSE + built frontend.
+import { serverConfig } from './node/env.js'; // must be first: loads .env, store and transport
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -105,6 +106,6 @@ startJobs(() => {
 });
 onEvent((ev) => { if (ev === 'candles') { computeSignals(); } });
 
-await app.listen({ port: config.port, host: config.host });
-console.log(`Gold Signal Dashboard API on http://${config.host}:${config.port}${existsSync(dist) ? ' (serving web/dist)' : ''}`);
+await app.listen({ port: serverConfig.port, host: serverConfig.host });
+console.log(`Gold Signal Dashboard API on http://${serverConfig.host}:${serverConfig.port}${existsSync(dist) ? ' (serving web/dist)' : ''}`);
 console.log(`Keys: TwelveData=${!!config.keys.twelveData} FRED=${!!config.keys.fred} Finnhub=${!!config.keys.finnhub} (all optional, free)`);

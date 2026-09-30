@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 
+/** In-app engine (Android build). When set, the UI talks to it instead of the HTTP API. */
+export interface LocalBackend {
+  request(path: string): Promise<unknown>;
+  subscribe(fn: (event: string, data: unknown) => void): () => void;
+}
+let local: LocalBackend | null = null;
+export const setLocalBackend = (b: LocalBackend) => { local = b; };
+
 export async function api<T>(path: string): Promise<T> {
+  if (local) return (await local.request(path)) as T;
   const r = await fetch(`/api/${path}`);
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
@@ -37,7 +46,16 @@ let es: EventSource | null = null;
 let connected = false;
 const connListeners = new Set<(c: boolean) => void>();
 
+let localSubscribed = false;
 function ensureStream() {
+  if (local) {
+    if (localSubscribed) return;
+    localSubscribed = true;
+    connected = true;
+    connListeners.forEach((l) => l(true));
+    local.subscribe((ev, d) => handlers.get(ev)?.forEach((h) => h(d)));
+    return;
+  }
   if (es) return;
   es = new EventSource('/api/stream');
   es.onopen = () => { connected = true; connListeners.forEach((l) => l(true)); };
@@ -65,7 +83,7 @@ export function useStream(event: string, h: Handler) {
 
 export function useStreamConnected() {
   const [c, setC] = useState(connected);
-  useEffect(() => { ensureStream(); connListeners.add(setC); return () => { connListeners.delete(setC); }; }, []);
+  useEffect(() => { connListeners.add(setC); ensureStream(); setC(connected); return () => { connListeners.delete(setC); }; }, []);
   return c;
 }
 

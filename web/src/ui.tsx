@@ -68,8 +68,8 @@ export function Arrow({ dir }: { dir: number }) {
 }
 
 export function Sparkline({ points, w = 84, h = 26 }: { points: { value: number }[]; w?: number; h?: number }) {
-  if (!points || points.length < 2) return <svg width={w} height={h} aria-hidden />;
-  const v = points.map((p) => p.value);
+  const v = (points ?? []).map((p) => p.value).filter((x) => Number.isFinite(x));
+  if (v.length < 2) return <svg width={w} height={h} aria-hidden />;
   const min = Math.min(...v), max = Math.max(...v), span = max - min || 1;
   const x = (i: number) => (i / (v.length - 1)) * (w - 4) + 2;
   const y = (val: number) => h - 3 - ((val - min) / span) * (h - 6);

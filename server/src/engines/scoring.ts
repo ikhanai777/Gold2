@@ -1,8 +1,7 @@
 // Scoring model (SPEC §6.3). Each factor → sub-score in [-100, 100]
 // (positive = bullish gold). Horizon score = weighted mean over available
 // factors; unavailable factors are excluded and weights re-normalised.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import weightsFile from '../../../config/weights.json' with { type: 'json' };
 import type { Candle, SeriesPoint } from '../types.js';
 import { adx, atr, changeZ, clamp, ema, macd, rsi } from './indicators.js';
 import type { Zone } from './levels.js';
@@ -18,8 +17,7 @@ export const FACTOR_NAMES: Record<FactorId, string> = {
   news: 'News sentiment (24h)', seasonality: 'Seasonality',
 };
 
-const weightsFile = JSON.parse(readFileSync(resolve(process.cwd(), 'config/weights.json'), 'utf8'));
-export const WEIGHTS: Record<Horizon, Record<FactorId, number>> = weightsFile;
+export const WEIGHTS = weightsFile as unknown as Record<Horizon, Record<FactorId, number>>;
 export const THRESHOLDS: { strongBuy: number; buy: number; sell: number; strongSell: number; hysteresis: number } = weightsFile.thresholds;
 
 export interface FactorScore { id: FactorId; score: number | null; detail: string }

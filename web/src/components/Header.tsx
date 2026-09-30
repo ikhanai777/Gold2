@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStreamConnected } from '../api';
 import { fmt, fmtSigned, Fresh, timeAgo, type Freshness } from '../ui';
 
@@ -38,7 +38,7 @@ function StatusDialog({ status, onClose }: { status: StatusResp; onClose: () => 
   );
 }
 
-export function Header({ quote, status, theme, setTheme, onPerf }: { quote: QuoteResp | null; status: StatusResp | null; theme: string; setTheme: (t: string) => void; onPerf: () => void }) {
+export function Header({ quote, status, theme, setTheme, onPerf, extra }: { quote: QuoteResp | null; status: StatusResp | null; theme: string; setTheme: (t: string) => void; onPerf: () => void; extra?: ReactNode }) {
   const prev = useRef<number | null>(null);
   const [flash, setFlash] = useState('');
   const [showStatus, setShowStatus] = useState(false);
@@ -85,6 +85,7 @@ export function Header({ quote, status, theme, setTheme, onPerf }: { quote: Quot
           <span className={`dot ${!connected ? 'stale' : failing ? 'delayed' : 'live'}`} /> {connected ? (failing ? `${failing} source${failing > 1 ? 's' : ''} failing` : 'Data OK') : 'Reconnecting…'}
         </button>
         <button className="btn" onClick={onPerf}>Performance</button>
+        {extra}
         <select aria-label="Theme" value={theme} onChange={(e) => setTheme(e.target.value)}>
           <option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option>
         </select>

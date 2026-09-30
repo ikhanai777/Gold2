@@ -64,7 +64,7 @@ const MONTHS: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '
 /** GLD tonnes of gold held, from the SPDR historical archive (xlsx). */
 export async function gldHoldings(): Promise<SeriesPoint[]> {
   const buf = await getBuffer('gld', 'https://api.spdrgoldshares.com/api/v1/historical-archive?product=gld&exchange=NYSE&lang=en');
-  const wb = XLSX.read(buf, { type: 'buffer' });
+  const wb = XLSX.read(buf, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames.find((n) => /archive/i.test(n)) ?? wb.SheetNames[wb.SheetNames.length - 1]];
   const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, raw: true });
   const hdr = (rows[0] ?? []).map(String);
@@ -84,7 +84,7 @@ export async function gldHoldings(): Promise<SeriesPoint[]> {
 /** Caldara & Iacoviello daily Geopolitical Risk index (GPRD). */
 export async function gprDaily(): Promise<SeriesPoint[]> {
   const buf = await getBuffer('gpr', 'https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls');
-  const wb = XLSX.read(buf, { type: 'buffer' });
+  const wb = XLSX.read(buf, { type: 'array' });
   const rows = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true });
   const hdr = (rows[0] ?? []).map(String);
   const iDay = hdr.indexOf('DAY'), iG = hdr.indexOf('GPRD');

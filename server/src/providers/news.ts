@@ -33,7 +33,8 @@ export const RSS_FEEDS: { id: string; name: string; url: string }[] = [
 ];
 
 export async function fetchRss(feed: (typeof RSS_FEEDS)[number]): Promise<RawNews[]> {
-  const text = await getText('rss', feed.url);
+  // Each feed has its own backoff, so one feed's rate limit never pauses the others.
+  const text = await getText(`rss:${feed.id}`, feed.url);
   const doc = xml.parse(text);
   let items = doc?.rss?.channel?.item ?? doc?.feed?.entry ?? [];
   if (!Array.isArray(items)) items = [items];

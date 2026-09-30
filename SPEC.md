@@ -503,6 +503,7 @@ The implementation follows this spec. These are the differences found while buil
 | Calendar "actual" | shown once released | Shown only if the source provides it. The Forex Factory weekly feed has none, so "—" | Never estimated |
 | Central-bank buying | — | Not included (see §4.2) | No free machine-readable source |
 | Hosting | §7.2 | Node + Fastify + `node:sqlite` in one process; `Dockerfile` and `docker-compose.yml` included | — |
+| Mobile | PWA / mobile app (v2, §9) | **Standalone Android app** (Capacitor 8). The same engine runs on the phone and fetches sources through native HTTP; storage, transport and config are injected per platform (`server/src/store.ts`, `transport.ts`, `config.ts`). See `ANDROID.md` | Live data on the phone without a server |
 
 **Updated Yahoo budget:** futures 1m every 2 min (720), 5m/15m/1h/1d refresh every 30 min (192), spark live (288), spark daily (8), daily backfill (5) ≈ 1,200 calls/day against a self-imposed cap of 2,500.
 

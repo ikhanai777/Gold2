@@ -1,10 +1,8 @@
 // Shared HTTP layer: proxy support, timeouts, per-provider daily caps and
 // health tracking. Every outbound call goes through here.
-import { fetch, EnvHttpProxyAgent, setGlobalDispatcher, type Response } from 'undici';
 import { config } from './config.js';
-import { db } from './db.js';
-
-if (process.env.HTTPS_PROXY || process.env.https_proxy) setGlobalDispatcher(new EnvHttpProxyAgent());
+import { store } from './store.js';
+import { transport, type TransportResponse } from './transport.js';
 
 const UA = 'Mozilla/5.0 (GoldSignalDashboard; personal non-commercial use)';
 
@@ -20,24 +18,25 @@ export interface ProviderHealth {
 
 const health = new Map<string, ProviderHealth>();
 const today = () => new Date().toISOString().slice(0, 10);
-const getUsage = db.prepare('SELECT count FROM usage WHERE provider=? AND day=?');
-const bumpUsage = db.prepare(
-  'INSERT INTO usage (provider, day, count) VALUES (?, ?, 1) ON CONFLICT(provider, day) DO UPDATE SET count = count + 1',
-);
+
+/** Sub-providers such as "rss:bbc" share their family's per-source cap ("rss"). */
+const capFor = (provider: string) => config.dailyCaps[provider] ?? config.dailyCaps[provider.split(':')[0]] ?? 1000;
 
 function h(provider: string): ProviderHealth {
   let x = health.get(provider);
   if (!x) {
-    x = { provider, lastOk: null, lastError: null, lastErrorAt: null, callsToday: 0, cap: config.dailyCaps[provider] ?? 1000, backoffUntil: 0 };
+    x = { provider, lastOk: null, lastError: null, lastErrorAt: null, callsToday: 0, cap: capFor(provider), backoffUntil: 0 };
     health.set(provider, x);
   }
-  const row = getUsage.get(provider, today()) as { count: number } | undefined;
-  x.callsToday = row?.count ?? 0;
+  x.cap = capFor(provider);
+  x.callsToday = store().usageGet(provider, today());
   return x;
 }
 
 export function providerHealth(): ProviderHealth[] {
-  return Object.keys(config.dailyCaps).map((p) => h(p));
+  // Every configured provider plus sub-providers seen at runtime (e.g. each RSS feed).
+  const ids = new Set([...Object.keys(config.dailyCaps).filter((p) => p !== 'rss'), ...health.keys()]);
+  return [...ids].sort().map((p) => h(p));
 }
 
 export class ProviderError extends Error {
@@ -54,7 +53,7 @@ export async function request(
   provider: string,
   url: string,
   opts: { timeoutMs?: number; headers?: Record<string, string> } = {},
-): Promise<Response> {
+): Promise<TransportResponse> {
   const st = h(provider);
   if (Date.now() < st.backoffUntil) throw new ProviderError(provider, 'in backoff after rate limit');
   if (st.callsToday >= st.cap) throw new ProviderError(provider, `daily cap ${st.cap} reached (free-tier guardrail)`);
@@ -66,19 +65,18 @@ export async function request(
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   }
 
-  bumpUsage.run(provider, today());
+  store().usageBump(provider, today());
   st.callsToday++;
   try {
-    const res = await fetch(url, {
+    const res = await transport()(url, {
       headers: { 'User-Agent': UA, Accept: '*/*', ...opts.headers },
-      signal: AbortSignal.timeout(opts.timeoutMs ?? 20000),
-      redirect: 'follow',
+      timeoutMs: opts.timeoutMs ?? 20000,
     });
     if (res.status === 429 || res.status === 403) {
       st.backoffUntil = Date.now() + (res.status === 429 ? 60_000 : 5 * 60_000);
       throw new ProviderError(provider, `HTTP ${res.status}`, res.status);
     }
-    if (!res.ok) throw new ProviderError(provider, `HTTP ${res.status}`, res.status);
+    if (res.status < 200 || res.status >= 300) throw new ProviderError(provider, `HTTP ${res.status}`, res.status);
     return res;
   } catch (e) {
     st.lastError = e instanceof Error ? e.message : String(e);
@@ -110,9 +108,9 @@ export async function getText(provider: string, url: string, opts?: Parameters<t
   return t;
 }
 
-export async function getBuffer(provider: string, url: string, opts?: Parameters<typeof request>[2]): Promise<Buffer> {
+export async function getBuffer(provider: string, url: string, opts?: Parameters<typeof request>[2]): Promise<Uint8Array> {
   const res = await request(provider, url, { timeoutMs: 60000, ...opts });
-  const b = Buffer.from(await res.arrayBuffer());
+  const b = await res.bytes();
   markOk(provider);
   return b;
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon foreground: three stacked gold bars (108dp canvas, 72dp safe zone). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#B8860B" android:pathData="M30,72 L78,72 L73,59 L35,59 Z" />
+    <path android:fillColor="#D4A72C" android:pathData="M32,70 L76,70 L72,61 L36,61 Z" />
+    <path android:fillColor="#B8860B" android:pathData="M42,57 L66,57 L62,45 L46,45 Z" />
+    <path android:fillColor="#E8C35A" android:pathData="M44,55 L64,55 L61,47 L47,47 Z" />
+</vector>

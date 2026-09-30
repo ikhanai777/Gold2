@@ -1,44 +1,26 @@
-// Runtime configuration. All API keys are optional free-tier keys; the app
-// runs without any of them and degrades the affected widgets to "unavailable".
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-// Minimal .env loader (no dependency). Real environment variables win.
-const envPath = resolve(process.cwd(), '.env');
-if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
-  }
-}
-
-const num = (v: string | undefined, d: number) => (v && !Number.isNaN(Number(v)) ? Number(v) : d);
+// Platform-neutral runtime configuration. All API keys are optional free-tier
+// keys; the app runs without any of them and degrades the affected widgets to
+// "unavailable". The Node server fills this from .env/process.env (node/env.ts);
+// the Android app fills it from its Settings screen.
 
 export const config = {
-  port: num(process.env.PORT, 8787),
-  host: process.env.HOST ?? '127.0.0.1',
-  dbPath: process.env.DB_PATH ?? resolve(process.cwd(), 'data/gold.db'),
-  keys: {
-    twelveData: process.env.TWELVEDATA_API_KEY || '',
-    fred: process.env.FRED_API_KEY || '',
-    finnhub: process.env.FINNHUB_API_KEY || '',
-  },
+  keys: { twelveData: '', fred: '', finnhub: '' },
   // Daily request caps, deliberately below each provider's free limit (SPEC §4.5).
   dailyCaps: {
-    'gold-api': num(process.env.CAP_GOLDAPI, 9000),
-    swissquote: num(process.env.CAP_SWISSQUOTE, 6000),
-    twelvedata: num(process.env.CAP_TWELVEDATA, 700),
-    fred: num(process.env.CAP_FRED, 500),
-    finnhub: num(process.env.CAP_FINNHUB, 2000),
-    gdelt: num(process.env.CAP_GDELT, 400),
-    yahoo: num(process.env.CAP_YAHOO, 2500),
-    treasury: 100,
+    'gold-api': 9000,
+    swissquote: 6000,
+    twelvedata: 700,
+    fred: 500,
+    finnhub: 2000,
+    gdelt: 400,
+    yahoo: 2500,
+    treasury: 300,
     stooq: 20,
     cftc: 20,
     gld: 20,
     gpr: 10,
     coinbase: 2000,
-    rss: 3000,
+    rss: 600, // per feed (rss:<feed>)
     forexfactory: 100,
     fomc: 10,
     nyfed: 50,
@@ -47,3 +29,17 @@ export const config = {
 };
 
 export type ProviderId = keyof typeof config.dailyCaps;
+
+const num = (v: string | undefined, d: number) => (v && !Number.isNaN(Number(v)) ? Number(v) : d);
+
+/** Apply key/cap settings from an environment-like map (process.env or app settings). */
+export function applySettings(env: Record<string, string | undefined>) {
+  config.keys.twelveData = (env.TWELVEDATA_API_KEY ?? '').trim();
+  config.keys.fred = (env.FRED_API_KEY ?? '').trim();
+  config.keys.finnhub = (env.FINNHUB_API_KEY ?? '').trim();
+  const caps: Record<string, string> = {
+    'gold-api': 'CAP_GOLDAPI', swissquote: 'CAP_SWISSQUOTE', twelvedata: 'CAP_TWELVEDATA', fred: 'CAP_FRED',
+    finnhub: 'CAP_FINNHUB', gdelt: 'CAP_GDELT', yahoo: 'CAP_YAHOO',
+  };
+  for (const [p, k] of Object.entries(caps)) config.dailyCaps[p] = num(env[k], config.dailyCaps[p]);
+}

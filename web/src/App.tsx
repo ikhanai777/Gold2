@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { loadPref, savePref, usePoll, useEventBump, useStream } from './api';
 import { Calendar, type CalendarResp } from './components/Calendar';
 import { FactorMonitor, type Factor } from './components/FactorMonitor';
@@ -9,7 +9,7 @@ import { Performance } from './components/Performance';
 import { Ranges, type RangesResp } from './components/Ranges';
 import { SignalBoard, type SignalsResp } from './components/SignalBoard';
 
-export function App() {
+export function App({ headerExtra }: { headerExtra?: ReactNode } = {}) {
   const [theme, setThemeState] = useState<string>(() => loadPref('theme', 'dark'));
   const setTheme = (t: string) => { setThemeState(t); savePref('theme', t); };
   useEffect(() => {
@@ -44,7 +44,7 @@ export function App() {
   const instruments = status.data?.instruments ?? [];
   return (
     <div className="app">
-      <Header quote={liveQuote} status={status.data} theme={theme} setTheme={setTheme} onPerf={() => setShowPerf(true)} />
+      <Header quote={liveQuote} status={status.data} theme={theme} setTheme={setTheme} onPerf={() => setShowPerf(true)} extra={headerExtra} />
       <div className="disclaimer" role="note">
         <strong>Not financial advice.</strong> For information and education only. Signals and ranges are probabilistic estimates computed from real public data and can be wrong.
       </div>

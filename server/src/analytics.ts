@@ -1,7 +1,7 @@
 // Builds every API payload from real state. All computed values carry
 // `computed: true` plus the inputs they came from (SPEC §1.4).
 import { config } from './config.js';
-import { db } from './db.js';
+import { store } from './store.js';
 import { aggregate } from './engines/aggregate.js';
 import { runBacktest, macroScores, type BacktestResult, type MacroHistory } from './engines/backtest.js';
 import { atr, bollinger, correlation, ema, lastValid, macd, pctChanges, pivots, rsi, sessionVwap } from './engines/indicators.js';
@@ -320,13 +320,19 @@ function ratioSpark(a: string, b: string, mult = 1): SeriesPoint[] {
 // ---------------- signals ----------------
 
 export const HORIZON_TF: Record<Horizon, Timeframe> = { intraday: '1h', swing: '1d', position: '1w' };
-const prevLabels: Partial<Record<Horizon, Label>> = {};
-for (const h of ['intraday', 'swing', 'position'] as Horizon[]) {
-  const r = db.prepare('SELECT label FROM signal_log WHERE horizon=? ORDER BY ts DESC LIMIT 1').get(h) as { label: Label } | undefined;
-  if (r) prevLabels[h] = r.label;
-}
+// Previous labels (for hysteresis) are restored lazily from the store on first use.
+let prevLabels: Partial<Record<Horizon, Label>> | null = null;
 const lastLogged: Partial<Record<Horizon, number>> = {};
-const logSignal = db.prepare('INSERT OR REPLACE INTO signal_log (ts, horizon, score, label, confidence, price, instrument) VALUES (?, ?, ?, ?, ?, ?, ?)');
+function previousLabels() {
+  if (!prevLabels) {
+    prevLabels = {};
+    for (const h of ['intraday', 'swing', 'position'] as Horizon[]) {
+      const l = store().lastSignalLabel(h) as Label | null;
+      if (l) prevLabels[h] = l;
+    }
+  }
+  return prevLabels;
+}
 
 export function macroHistory(): MacroHistory {
   const s = (id: string) => state.series.get(id)?.points;
@@ -359,6 +365,7 @@ export function computeSignals() {
   const inst = analysisInstrument();
   if (!inst) return;
   const cards: SignalCard[] = [];
+  const prevLabels = previousLabels();
   for (const h of ['intraday', 'swing', 'position'] as Horizon[]) {
     const tf = HORIZON_TF[h];
     const bars = getCandles(inst, tf)?.bars ?? [];
@@ -380,14 +387,14 @@ export function computeSignals() {
     });
     const nowIso = new Date().toISOString();
     if (r.label !== prevLabels[h] || Date.now() - (lastLogged[h] ?? 0) > HOUR) {
-      logSignal.run(nowIso, h, r.score, r.label, r.confidence, bars[t].close, inst);
+      store().logSignal({ ts: nowIso, horizon: h, score: r.score, label: r.label, confidence: r.confidence, price: bars[t].close, instrument: inst });
       lastLogged[h] = Date.now();
     }
     prevLabels[h] = r.label;
     const a = lastValid(pre.atr);
     const sup = zones.filter((z) => z.kind === 'support').sort((x, y) => y.price - x.price)[0] ?? null;
     const res = zones.filter((z) => z.kind === 'resistance').sort((x, y) => x.price - y.price)[0] ?? null;
-    const hist = db.prepare('SELECT ts, label, score FROM signal_log WHERE horizon=? AND ts>=? ORDER BY ts').all(h, new Date(Date.now() - 30 * DAY).toISOString()) as { ts: string; label: Label; score: number }[];
+    const hist = store().signalHistory(h, new Date(Date.now() - 30 * DAY).toISOString()) as { ts: string; label: Label; score: number }[];
     let lastChange: string | null = null;
     for (let i = hist.length - 1; i > 0; i--) if (hist[i].label !== hist[i - 1].label) { lastChange = hist[i].ts; break; }
     cards.push({ ...r, tf, instrument: inst, price: bars[t].close, levels: { support: sup, resistance: res, atr: a, stopDistance: 1.5 * a }, history: hist, lastChange });
@@ -399,7 +406,6 @@ export function computeSignals() {
 
 let rangesCache: { instrument: InstrumentId | null; bands: RangeBand[]; ts: string } = { instrument: null, bands: [], ts: new Date().toISOString() };
 export const rangesPayload = () => rangesCache;
-const logRange = db.prepare('INSERT OR IGNORE INTO range_log (period, period_start, instrument, open, low, high, ext_low, ext_high, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 
 export function computeRanges() {
   const inst = analysisInstrument();
@@ -407,7 +413,9 @@ export function computeRanges() {
   const daily = getCandles(inst, '1d')?.bars ?? [];
   const sc = Object.fromEntries(signalsCache.cards.map((c) => [c.horizon, c.score]));
   const bands = projectRanges(daily, state.series.get('gvz')?.points ?? [], { day: sc.intraday ?? 0, week: sc.swing ?? 0, month: sc.position ?? 0 }, zonesFor(inst, '1d'));
-  for (const b of bands) logRange.run(b.period, new Date(b.periodStart * 1000).toISOString(), inst, b.open, b.low, b.high, b.extLow, b.extHigh, new Date().toISOString());
+  for (const b of bands) {
+    store().logRange({ period: b.period, periodStart: new Date(b.periodStart * 1000).toISOString(), instrument: inst, open: b.open, low: b.low, high: b.high, extLow: b.extLow, extHigh: b.extHigh, publishedAt: new Date().toISOString() });
+  }
   rangesCache = { instrument: inst, bands, ts: new Date().toISOString() };
 }
 
@@ -444,19 +452,19 @@ export function computePerformance() {
 export function performancePayload() {
   const inst = rangesCache.instrument;
   // Forward-tracking of published ranges whose period has ended.
-  const rows = db.prepare('SELECT * FROM range_log ORDER BY period_start DESC LIMIT 200').all() as any[];
+  const rows = store().recentRanges(200);
   const daily = inst ? getCandles(inst, '1d')?.bars ?? [] : [];
   const tracked = rows.map((r) => {
-    const start = Date.parse(r.period_start) / 1000;
+    const start = Date.parse(r.periodStart) / 1000;
     const len = r.period === 'day' ? 1 : r.period === 'week' ? 7 : 31;
     const end = start + len * 86400;
     if (Date.now() / 1000 < end || r.instrument !== inst) return null;
     const inPeriod = daily.filter((b) => b.time >= start && b.time < end);
     if (!inPeriod.length) return null;
     const close = inPeriod[inPeriod.length - 1].close;
-    return { period: r.period, periodStart: r.period_start, low: r.low, high: r.high, close, inside: close >= r.low && close <= r.high };
+    return { period: r.period, periodStart: r.periodStart, low: r.low, high: r.high, close, inside: close >= r.low && close <= r.high };
   }).filter(Boolean);
-  const sig = db.prepare('SELECT * FROM signal_log ORDER BY ts DESC LIMIT 500').all();
+  const sig = store().recentSignals(500);
   return { ...perfCache, forward: { ranges: tracked, signals: sig, since: state.startedAt } };
 }
 

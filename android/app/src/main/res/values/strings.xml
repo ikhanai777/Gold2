@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gold Signal</string>
+    <string name="title_activity_main">Gold Signal</string>
+    <string name="package_name">app.goldsignal.dashboard</string>
+    <string name="custom_url_scheme">app.goldsignal.dashboard</string>
+</resources>

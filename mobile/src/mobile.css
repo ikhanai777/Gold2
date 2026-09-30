@@ -1,0 +1,12 @@
+/* Android app: keep content clear of the status and navigation bars (edge-to-edge on Android 15+). */
+body {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+.btn, .seg button, .chip { min-height: 32px; }
+@media (max-width: 600px) {
+  .chart-wrap { height: clamp(360px, 58vh, 560px); }
+  .header .kv .v { font-size: 12px; }
+}

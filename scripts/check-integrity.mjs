@@ -12,7 +12,7 @@ const walk = (d) => readdirSync(d).flatMap((f) => {
   return statSync(p).isDirectory() ? walk(p) : [p];
 });
 
-const prodFiles = [...walk(join(root, 'server/src')), ...walk(join(root, 'web/src'))].filter((f) => /\.(ts|tsx|js|mjs)$/.test(f));
+const prodFiles = [...walk(join(root, 'server/src')), ...walk(join(root, 'web/src')), ...walk(join(root, 'mobile/src'))].filter((f) => /\.(ts|tsx|js|mjs)$/.test(f));
 const problems = [];
 
 const SYNTHETIC = [/Math\.random\s*\(/, /\bfaker\b/i, /\bmock(Data|Price|Candles?)\b/i, /\b(sample|dummy|fake)(Data|Prices?|Candles?|News)\b/i, /\bgenerate(Random|Fake|Synthetic)/i];

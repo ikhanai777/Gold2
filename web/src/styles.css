@@ -145,7 +145,7 @@ button { font: inherit; color: inherit; }
 .kv { display: flex; flex-direction: column; gap: 1px; }
 .kv .k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .kv .v { font-family: var(--mono); font-size: 13px; }
-.header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.header-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .btn { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
 .btn:hover { background: var(--surface-3); }
 .btn.active { border-color: var(--gold); color: var(--gold); }
